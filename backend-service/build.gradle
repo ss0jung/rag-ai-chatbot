@@ -1,0 +1,117 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.5.5'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.github.node-gradle.node' version '7.0.1'
+}
+
+group = 'com.sjpark'
+version = '0.0.1-SNAPSHOT'
+description = 'RAG chatbot'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+
+	// OpenAPI UI
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	runtimeOnly 'org.postgresql:postgresql'
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.security:spring-security-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Node.js 설정
+node {
+	version = '20.10.0'
+	npmVersion = '10.2.3'
+	download = true
+	nodeProjectDir = file("${project.projectDir}/frontend")
+}
+
+
+tasks.register('frontendBuild', NpmTask) {
+	description = "Build React app"
+	group = "frontend"
+	dependsOn 'npmInstall'       // 기본 제공 npmInstall 사용
+	args = ['run', 'build']
+
+	// 입력/출력 선언 (증분 빌드 캐시용)
+	inputs.dir("$projectDir/frontend/src")
+	inputs.dir("$projectDir/frontend/public")
+	inputs.files(
+			"$projectDir/frontend/package.json",
+			"$projectDir/frontend/package-lock.json",
+			"$projectDir/frontend/vite.config.ts"
+	)
+	// Vite outDir이 ../src/main/resources/static 인 경우
+	outputs.dir("$projectDir/src/main/resources/static")
+}
+
+tasks.register('frontendClean', Delete) {
+	description = "Clean React build artifacts"
+	group = "frontend"
+	delete "$projectDir/frontend/dist",
+			"$projectDir/frontend/node_modules",
+			"$projectDir/src/main/resources/static"
+}
+
+tasks.register('frontendDev', NpmTask) {
+	description = "Run React development server"
+	group = "frontend"
+	dependsOn 'npmInstall'
+	args = ['run', 'dev']
+}
+
+// Spring Boot 빌드 파이프라인에 React 빌드 통합
+processResources.dependsOn 'frontendBuild'
+clean.dependsOn 'frontendClean'
+
+// 개발 편의 태스크
+tasks.register('dev') {
+	description = "Run both Spring Boot and React in development mode"
+	group = "development"
+	doLast {
+		println "Run './gradlew bootRun' in one terminal"
+		println "Run './gradlew frontendDev' in another terminal"
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+// JAR 설정
+jar {
+	enabled = false
+}
+
+bootJar {
+	enabled = true
+	archiveClassifier = ''
+}

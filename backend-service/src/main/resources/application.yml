@@ -1,0 +1,25 @@
+server:
+  port: 8080
+
+app:
+  ai:
+    base-url: http://localhost:8000  # FastAPI 엔드포인트
+
+spring:
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/postgres
+    username: postgres
+    password: gncn0301
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate.ddl-auto: update
+    properties.hibernate.format_sql: true
+
+  # 선택: Redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
