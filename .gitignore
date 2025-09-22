@@ -7,6 +7,17 @@ __pycache__/
 .venv/
 env/
 
+# Storage
+storage/uploaded/*
+storage/vectorstore/*
+storage/temp/*
+!storage/uploaded/.gitkeep
+!storage/vectorstore/.gitkeep
+!storage/temp/.gitkeep
+*.faiss
+*.pkl
+*.index
+
 # Java / Gradle
 *.class
 *.jar
@@ -15,6 +26,7 @@ env/
 /build/
 /target/
 /.gradle/
+backend-service/src/main/resources/application-secret.yml
 
 # Node / Frontend
 node_modules/

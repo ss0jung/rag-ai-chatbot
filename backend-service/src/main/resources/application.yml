@@ -9,17 +9,16 @@ spring:
   jackson:
     property-naming-strategy: SNAKE_CASE
 
-  datasource:
-    url: jdbc:postgresql://localhost:5432/postgres
-    username: postgres
-    password: gncn0301
-    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate.ddl-auto: update
     properties.hibernate.format_sql: true
+
+  config:
+    import: application-secret.yml
 
   # 선택: Redis
   data:
     redis:
       host: localhost
       port: 6379
+
