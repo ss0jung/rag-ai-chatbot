@@ -9,9 +9,11 @@ env/
 
 # Storage
 storage/uploaded/*
+storage/processed/*
 storage/vectorstore/*
 storage/temp/*
 !storage/uploaded/.gitkeep
+!storage/processed/.gitkeep
 !storage/vectorstore/.gitkeep
 !storage/temp/.gitkeep
 *.faiss
@@ -41,3 +43,6 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# logs
+logs/

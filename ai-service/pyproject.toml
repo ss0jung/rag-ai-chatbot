@@ -61,6 +61,7 @@ torch = "2.2.0"
 torchvision = "0.*"
 faiss-cpu = "1.*"
 open-clip-torch = "2.*"
+numpy = "<2"
 
 # 기타 유틸리티 및 필수 패키지
 python-dotenv = "1.*"

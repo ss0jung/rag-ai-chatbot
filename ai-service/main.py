@@ -25,9 +25,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Create API router
-api_router = APIRouter(prefix="/api")
-
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -72,8 +69,8 @@ async def read_root():
     return {"message": "Welcome to the AI Service!"}
 
 
-@app.post("/rag/preprocess")
-async def rag_preprocess():
+@app.post("/api/rag/preprocess")
+async def rag_preprocess(doc_path: str):
     """RAG Preprocess: load document, split, create embedding, save vectorstore"""
 
     rag_logger.info("RAG Preprocess started")
@@ -81,7 +78,7 @@ async def rag_preprocess():
     # 1. load document
     docs = []
     try:
-        doc_path = "../storage/data/uploaded/SPRi AI Brief_9월호_산업동향_0909_F.pdf"
+        # doc_path = "../storage/data/uploaded/SPRi AI Brief_9월호_산업동향_0909_F.pdf"
         if Path(doc_path).exists():
             loader = PyMuPDFLoader(doc_path)
             docs = loader.load()
@@ -111,4 +108,32 @@ async def rag_preprocess():
     # vectorstore.save_local(vectorstore_path)
 
 
-app.include_router(api_router)
+@app.get("/api/rag/query")
+async def rag_query(query: str):
+    """RAG Query: load vectorstore, retrieve relevant docs, generate answer"""
+
+    rag_logger.info("RAG Query started")
+    rag_logger.info(f"Query: {query}")
+
+    prompt_template = """
+    You are an AI assistant who helps people find information.
+    Use the following context to answer the last question.
+    If you don't know the answer, say you don't know, and don't try to make it up.
+    Please answer in Korean.
+
+    Question: {question}
+    Answer:
+    """
+
+    prompt = PromptTemplate.from_template(prompt_template)
+    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+    output_parser = StrOutputParser()
+
+    chain = prompt | llm | output_parser
+
+    answer = chain.invoke({"question": query})
+
+    rag_logger.info(f"Answer: {answer}")
+    rag_logger.info("Generated answer")
+
+    return {"answer": answer}
