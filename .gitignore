@@ -8,14 +8,14 @@ __pycache__/
 env/
 
 # Storage
-storage/uploaded/*
-storage/processed/*
-storage/vectorstore/*
-storage/temp/*
-!storage/uploaded/.gitkeep
-!storage/processed/.gitkeep
-!storage/vectorstore/.gitkeep
-!storage/temp/.gitkeep
+storage/data/uploaded/*
+storage/data/processed/*
+storage/data/vectorstore/*
+storage/data/temp/*
+!storage/data/uploaded/.gitkeep
+!storage/data/processed/.gitkeep
+!storage/data/vectorstore/.gitkeep
+!storage/data/temp/.gitkeep
 *.faiss
 *.pkl
 *.index
@@ -29,6 +29,9 @@ storage/temp/*
 /target/
 /.gradle/
 backend-service/src/main/resources/application-secret.yml
+
+# Static assets
+backend-service/src/main/resources/static/assets
 
 # Node / Frontend
 node_modules/

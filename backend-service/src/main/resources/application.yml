@@ -3,7 +3,9 @@ server:
 
 app:
   ai:
-    base-url: http://localhost:8000  # FastAPI 엔드포인트
+    base-url: http://127.0.0.1:8000  # FastAPI 엔드포인트
+  file:
+    upload-dir: D:/ai-chatbot-workspace/storage/data/uploaded # 파일 업로드 디렉토리
 
 spring:
   jackson:
@@ -15,8 +17,13 @@ spring:
 
   config:
     import: application-secret.yml
+  
+  # 파일 업로드 설정
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
 
-  # 선택: Redis
   data:
     redis:
       host: localhost

@@ -124,9 +124,12 @@ export default function ChatApp() {
 
     try {
       setIsUploading(true);
-      const res = await fetch("/api/upload", {
+      const res = await fetch("/backend-api/files/uploads", {
         method: "POST",
         body: form,
+        headers: {
+          'Accept': 'application/json'
+          }
       });
 
       if (!res.ok) {
