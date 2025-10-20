@@ -93,6 +93,7 @@ mypy = "1.*"
 pinecone = "5.*"
 wikipedia = "1.*"
 scikit-learn = "1.*"
+loguru = "^0.7.3"
 
 [build-system]
 requires = ["poetry-core"]

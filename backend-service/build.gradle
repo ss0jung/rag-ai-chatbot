@@ -26,92 +26,105 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-actuator'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-web'
+    // Spring Boot
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
 
-	// OpenAPI UI
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+    // Swagger UI 설정 : springboot 3.5.x 이상 버전용
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
 
-	compileOnly 'org.projectlombok:lombok'
-	developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	runtimeOnly 'org.postgresql:postgresql'
-	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
-	annotationProcessor 'org.projectlombok:lombok'
+    // Hibernate Types for JSONB and Array
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.7.0'
 
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.springframework.security:spring-security-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    // WebClient (AI API 프록시용)
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+
+    // JWT
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.3'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+
+    // Database
+    runtimeOnly 'org.postgresql:postgresql'
+    runtimeOnly 'com.h2database:h2' // 개발용
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
 }
+// ==================== Node.js 및 프론트엔드 설정 ====================
 
-// Node.js 설정
 node {
-	version = '20.19.0'
-	npmVersion = '10.2.3'
-	download = true
-	nodeProjectDir = file("${project.projectDir}/frontend")
+    version = '20.19.0'
+    npmVersion = '10.2.3'
+    download = true
+    nodeProjectDir = file("${project.projectDir}/frontend")
 }
-
 
 tasks.register('frontendBuild', NpmTask) {
-	description = "Build React app"
-	group = "frontend"
-	dependsOn 'npmInstall'       // 기본 제공 npmInstall 사용
-	args = ['run', 'build']
+    description = "Build React app"
+    group = "frontend"
+    dependsOn 'npmInstall'
+    args = ['run', 'build']
 
-	// 입력/출력 선언 (증분 빌드 캐시용)
-	inputs.dir("$projectDir/frontend/src")
-	inputs.dir("$projectDir/frontend/public")
-	inputs.files(
-			"$projectDir/frontend/package.json",
-			"$projectDir/frontend/package-lock.json",
-			"$projectDir/frontend/vite.config.ts"
-	)
-	// Vite outDir이 ../src/main/resources/static 인 경우
-	outputs.dir("$projectDir/src/main/resources/static")
+    inputs.dir("$projectDir/frontend/src")
+    inputs.dir("$projectDir/frontend/public")
+    inputs.files(
+            "$projectDir/frontend/package.json",
+            "$projectDir/frontend/package-lock.json",
+            "$projectDir/frontend/vite.config.ts"
+    )
+    // Vite가 ../src/main/resources/static으로 직접 빌드
+    outputs.dir("$projectDir/src/main/resources/static")
 }
 
 tasks.register('frontendClean', Delete) {
-	description = "Clean React build artifacts"
-	group = "frontend"
-	delete "$projectDir/frontend/dist",
-			"$projectDir/frontend/node_modules",
-			"$projectDir/src/main/resources/static"
+    description = "Clean React build artifacts"
+    group = "frontend"
+    delete "$projectDir/frontend/dist",
+            "$projectDir/frontend/node_modules",
+            "$projectDir/src/main/resources/static"
 }
 
 tasks.register('frontendDev', NpmTask) {
-	description = "Run React development server"
-	group = "frontend"
-	dependsOn 'npmInstall'
-	args = ['run', 'dev']
+    description = "Run React development server"
+    group = "frontend"
+    dependsOn 'npmInstall'
+    args = ['run', 'dev']
 }
 
 // Spring Boot 빌드 파이프라인에 React 빌드 통합
-processResources.dependsOn 'frontendBuild'
+// 개발 중에는 주석 처리하고, 배포 전에 활성화 하기
+//processResources.dependsOn 'frontendBuild'
 clean.dependsOn 'frontendClean'
 
 // 개발 편의 태스크
 tasks.register('dev') {
-	description = "Run both Spring Boot and React in development mode"
-	group = "development"
-	doLast {
-		println "Run './gradlew bootRun' in one terminal"
-		println "Run './gradlew frontendDev' in another terminal"
-	}
+    description = "Run both Spring Boot and React in development mode"
+    group = "development"
+    doLast {
+        println "Run './gradlew bootRun' in one terminal"
+        println "Run './gradlew frontendDev' in another terminal"
+    }
 }
+
+// ==================== Test & JAR 설정 ====================
 
 tasks.named('test') {
-	useJUnitPlatform()
+    useJUnitPlatform()
 }
 
-// JAR 설정
 jar {
-	enabled = false
+    enabled = false
 }
 
 bootJar {
-	enabled = true
-	archiveClassifier = ''
+    enabled = true
+    archiveClassifier = ''
 }

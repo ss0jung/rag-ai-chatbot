@@ -1,139 +1,116 @@
-import os
-from datetime import datetime
-from pathlib import Path
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, APIRouter
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import time
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import PyMuPDFLoader
-from langchain_community.vectorstores import FAISS
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from pydantic import BaseModel
+from contextlib import asynccontextmanager
+import chromadb
+from loguru import logger
+import sys
+from dotenv import load_dotenv
 
-# Import logging configuration
-from logging_config import app_logger, rag_logger, api_logger
-
-# Load environment variables from .env file
-load_dotenv()
-
-app = FastAPI(
-    title="AI Service API",
-    description="AI-powered chatbot service with RAG capabilities",
-    version="1.0.0",
+# 로깅 설정
+logger.remove()
+logger.add(
+    sys.stdout,
+    level="INFO",
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>",
 )
 
-# Add CORS middleware
+# 글로벌 변수 (나중에 의존성 주입으로 개선)
+chroma_client = None
+
+# ----------------------------------
+# Lifespan settings
+# ----------------------------------
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """애플리케이션 수명 주기 관리"""
+    global chroma_client
+
+    # Startup
+    logger.info("AI Service Strarting up...")
+
+    try:
+        chroma_client = chromadb.HttpClient(host="localhost", port=8001)
+        heartbeat = chroma_client.heartbeat()
+        logger.info(f"ChromaDB Client connected (heartbeat: {heartbeat})")
+    except Exception as e:
+        logger.error(f"ChromaDB Client connection failed: {e}")
+        chroma_client = None
+
+    yield  # 애플리케이션이 실행
+
+    # Shutdown
+    logger.info("AI Service Shutting down...")
+
+
+# ----------------------------------
+# FastAPI 앱 생성 (Lifespan 포함)
+# ----------------------------------
+app = FastAPI(
+    title="RAG AI Service",
+    description="AI Service for RAG Chatbot",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# Request logging middleware
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    start_time = time.time()
-
-    # Log incoming request
-    api_logger.info(
-        f"Request: {request.method} {request.url.path} "
-        f"from {request.client.host if request.client else 'unknown'}"
-    )
-
-    # Process request
-    response = await call_next(request)
-
-    # Log response
-    process_time = time.time() - start_time
-    api_logger.info(f"Response: {response.status_code} " f"in {process_time:.4f}s")
-
-    return response
+# ===== Health Check Endpoint =====
 
 
-# Log application startup
-app_logger.info("=" * 50)
-app_logger.info("AI Service starting up...")
-app_logger.info(f"Debug mode: {os.getenv('DEBUG', 'False')}")
-app_logger.info(f"Log level: {os.getenv('LOG_LEVEL', 'INFO')}")
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+    chroma_connected: bool
 
 
-@app.get("/")
-async def read_root():
-    api_logger.info("Root endpoint accessed")
-    return {"message": "Welcome to the AI Service!"}
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    """헬스 체크 엔드포인트"""
+    chroma_ok = chroma_client is not None
+
+    return HealthResponse(status="ok", version="1.0.0", chroma_connected=chroma_ok)
 
 
-@app.post("/api/rag/preprocess")
-async def rag_preprocess(doc_path: str):
-    """RAG Preprocess: load document, split, create embedding, save vectorstore"""
+# ===== 루트 엔드포인트 =====
+async def root():
+    """루트 엔드포인트"""
+    return {"message": "RAG AI Service API", "docs": "/docs", "health": "/health"}
 
-    rag_logger.info("RAG Preprocess started")
 
-    # 1. load document
-    docs = []
+# ===== 테스트용 임시 엔드포인트 (나중에 삭제) =====
+
+
+@app.get("/test/chroma")
+async def test_chroma():
+    """ChromaDB 연결 테스트"""
+    if not chroma_client:
+        return {"error": "ChromaDB not connected"}
+
     try:
-        # doc_path = "../storage/data/uploaded/SPRi AI Brief_9월호_산업동향_0909_F.pdf"
-        if Path(doc_path).exists():
-            loader = PyMuPDFLoader(doc_path)
-            docs = loader.load()
-            rag_logger.info(f"Successfully loaded document with {len(docs)} pages")
-        else:
-            rag_logger.warning(f"Document not found: {doc_path}")
+        # 컬렉션 목록 조회
+        collections = chroma_client.list_collections()
+        return {
+            "status": "ok",
+            "collections": [col.name for col in collections],
+            "count": len(collections),
+        }
     except Exception as e:
-        rag_logger.error(f"Failed to load document: {str(e)}", exc_info=True)
-        docs = []
-
-    # 2. split document
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=100,
-    )
-    split_texts = text_splitter.split_documents(docs)
-    rag_logger.info(f"Document split into {len(split_texts)} chunks")
-
-    # 3. crate embedding
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-    # 4. create vectorstore and save
-    # InMemory vectorstore
-    vectorstore = FAISS.from_document(documents=split_texts, embedding=embeddings)
-    # 실제 서비스에서는 아래 주석해제해서 벡터스토어를 저장
-    # vectorstore_path = "../storage/vectorstore/faiss_index"
-    # vectorstore.save_local(vectorstore_path)
+        logger.error(f"ChromaDB test failed: {e}")
+        return {"error": str(e)}
 
 
-@app.get("/api/rag/query")
-async def rag_query(query: str):
-    """RAG Query: load vectorstore, retrieve relevant docs, generate answer"""
+if __name__ == "__main__":
+    import uvicorn
 
-    rag_logger.info("RAG Query started")
-    rag_logger.info(f"Query: {query}")
-
-    prompt_template = """
-    You are an AI assistant who helps people find information.
-    Use the following context to answer the last question.
-    If you don't know the answer, say you don't know, and don't try to make it up.
-    Please answer in Korean.
-
-    Question: {question}
-    Answer:
-    """
-
-    prompt = PromptTemplate.from_template(prompt_template)
-    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
-    output_parser = StrOutputParser()
-
-    chain = prompt | llm | output_parser
-
-    answer = chain.invoke({"question": query})
-
-    rag_logger.info(f"Answer: {answer}")
-    rag_logger.info("Generated answer")
-
-    return {"answer": answer}
+    uvicorn.run(app, host="0.0.0.0", port=8000)

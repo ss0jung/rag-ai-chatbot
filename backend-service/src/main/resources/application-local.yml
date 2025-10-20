@@ -1,31 +1,34 @@
-server:
-  port: 8080
-  error:
-    include-message: always
-
 spring:
-    application:
-        name: rag-chatbot
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ragdb
+    username: raguser
+    password: ragpass123
+    driver-class-name: org.postgresql.Driver
 
-    profiles:
-      active: local
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
 
-    jpa:
-      open-in-view: false
-      show-sql: true
-      properties:
-        hibernate:
-          format_sql: true
-          default_batch_fetch_size: 100
+  # 파일 업로드 설정
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
 
-# AI Service 설정
-ai-service:
-  base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
-  api-key: ${AI_API_KEY:dev_api_key}
-  timeout: 60000  # 60초
+# AI 서비스 설정
+ai:
+  service:
+    url: http://localhost:8000  # FastAPI 서버 주소
+    timeout: 30000               # 30초 타임아웃
 
-logging:
-  level:
-    com.sjpark: DEBUG
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
+# CORS 설정 (개발용)
+cors:
+  allowed-origins: http://localhost:3000,http://localhost:8080
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: "*"
+  exposed-headers: X-Session-ID

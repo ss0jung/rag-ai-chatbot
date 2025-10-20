@@ -8,14 +8,12 @@ __pycache__/
 env/
 
 # Storage
-storage/data/uploaded/*
-storage/data/processed/*
-storage/data/vectorstore/*
-storage/data/temp/*
-!storage/data/uploaded/.gitkeep
-!storage/data/processed/.gitkeep
-!storage/data/vectorstore/.gitkeep
-!storage/data/temp/.gitkeep
+storage/raw/**
+storage/artifacts/**
+storage/vdb/**
+!storage/vdb/_namespaces.json
+!storage/**/.gitkeep
+
 *.faiss
 *.pkl
 *.index

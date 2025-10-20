@@ -1,21 +1,23 @@
+/* --- Tailwind directives must be first --- */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  *, *::before, *::after { box-sizing: border-box; }
-
-  html, body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;        /* ← X가 아니라 아예 바디 스크롤 제거 */
-  }
-
-  #root {
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-  }
+/* --- Global resets for full-width app --- */
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left !important; /* kill any centered inheritance */
 }
+
+/* Remove template constraints that caused centering */
+#root {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* SPA style: prevent page scroll unless you need it */
+body { overflow: hidden; } /* change to auto if you prefer page scroll */
