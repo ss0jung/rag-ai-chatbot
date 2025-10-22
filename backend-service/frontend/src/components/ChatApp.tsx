@@ -47,6 +47,20 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
   collections: string[]; // 선택한 보관함 목록
  };
 
+ // API 응답 타입
+ type ApiResponse<T> = {
+  success: boolean;
+  data: T;
+  message?: string;
+ };
+
+ type NamespaceDTO = {
+  id: number;
+  name: string;
+  description: string;
+  createdAt: string;
+ };
+
  // 색상 매핑
  type NSColor = { badge: string; dot: string };
  function nsColor(name: string): NSColor {
@@ -65,6 +79,35 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 // 유틸
  const uid = () => Math.random().toString(36).slice(2, 10);
  const fmtTime = (t: number) => new Date(t).toLocaleTimeString();
+
+// API 함수들
+ const fetchNamespaces = async (userId: number): Promise<string[]> => {
+  const response = await fetch(`/ai/namespaces?userId=${userId}`);
+  if (!response.ok) {
+    throw new Error(`네임스페이스 조회 실패: ${response.status}`);
+  }
+  const result: ApiResponse<NamespaceDTO[]> = await response.json();
+  return result.data.map(ns => ns.name);
+ };
+
+ const createNamespaceAPI = async (userId: number, name: string, description?: string): Promise<NamespaceDTO> => {
+  const response = await fetch('/ai/namespaces', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      userId,
+      name,
+      description: description || `${name} 문서 보관함`,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`네임스페이스 생성 실패: ${response.status}`);
+  }
+  const result: ApiResponse<NamespaceDTO> = await response.json();
+  return result.data;
+ };
 
 // 샘플 데이터
  const SAMPLE_CITATIONS: Citation[] = [
@@ -242,7 +285,8 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
  export default function App() {
   const [session] = useState<Session>({ id: uid(), title: "새 세션", collections: [] });
   const [collections, setCollections] = useState<string[]>([]);
-  const [availableCollections, setAvailableCollections] = useState<string[]>(["mobile-2024", "ai-reports", "hr-policy"]);
+  const [availableCollections, setAvailableCollections] = useState<string[]>([]);
+  const [isLoadingNamespaces, setIsLoadingNamespaces] = useState(true);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -259,6 +303,25 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 
   const listRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null); // ⬅ 입력창 참조(자동 높이)
+
+  // 네임스페이스 목록 초기 로딩
+  useEffect(() => {
+    const loadNamespaces = async () => {
+      try {
+        setIsLoadingNamespaces(true);
+        const userId = 1; // TODO: 실제 로그인 userId로 변경 필요
+        const namespaces = await fetchNamespaces(userId);
+        setAvailableCollections(namespaces);
+      } catch (error) {
+        console.error('네임스페이스 목록 조회 실패:', error);
+        // 에러 시 빈 배열 유지
+        setAvailableCollections([]);
+      } finally {
+        setIsLoadingNamespaces(false);
+      }
+    };
+    loadNamespaces();
+  }, []);
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight }); }, [messages]);
 
@@ -293,7 +356,23 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
   };
 
   const quicks = ["요약해줘", "FAQ 만들어줘", "표로 정리해줘"];
-  const createNamespace = (name: string) => { setAvailableCollections((prev) => (prev.includes(name) ? prev : [...prev, name])); };
+
+  const createNamespace = async (name: string) => {
+    try {
+      const userId = 1; // TODO: 실제 로그인 userId로 변경 필요
+
+      // 백엔드 API로 네임스페이스 생성
+      await createNamespaceAPI(userId, name);
+
+      // 로컬 상태 업데이트
+      setAvailableCollections((prev) => (prev.includes(name) ? prev : [...prev, name]));
+
+      console.log(`네임스페이스 "${name}" 생성 완료`);
+    } catch (error) {
+      console.error('네임스페이스 생성 실패:', error);
+      alert(`네임스페이스 생성 중 오류가 발생했습니다: ${error}`);
+    }
+  };
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
