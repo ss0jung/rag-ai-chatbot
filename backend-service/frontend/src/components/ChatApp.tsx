@@ -399,13 +399,24 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 
           <div className="mt-5 text-xs font-semibold text-gray-500">문서 보관함</div>
           <div className="mt-2 flex flex-wrap gap-2">
-            {availableCollections.map((c) => {
-              const active = collections.includes(c);
-              return (
-                <button key={c} onClick={() => setCollections((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c])}
-                  className={`rounded-full border px-2 py-0.5 text-xs transition ${active ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>{c}</button>
-              );
-            })}
+            {isLoadingNamespaces ? (
+              // 로딩 중 스켈레톤
+              <>
+                <div className="h-6 w-20 animate-pulse rounded-full bg-gray-200"></div>
+                <div className="h-6 w-24 animate-pulse rounded-full bg-gray-200"></div>
+                <div className="h-6 w-16 animate-pulse rounded-full bg-gray-200"></div>
+              </>
+            ) : availableCollections.length > 0 ? (
+              availableCollections.map((c) => {
+                const active = collections.includes(c);
+                return (
+                  <button key={c} onClick={() => setCollections((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c])}
+                    className={`rounded-full border px-2 py-0.5 text-xs transition ${active ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>{c}</button>
+                );
+              })
+            ) : (
+              <div className="text-xs text-gray-400">보관함이 없습니다</div>
+            )}
           </div>
 
           <div className="mt-6">
