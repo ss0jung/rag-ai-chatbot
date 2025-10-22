@@ -7,7 +7,6 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -52,7 +51,8 @@ public class ApiResponse<T> {
   }
 
   // 실패 응답 (상세 정보 포함)
-  public static <T> ApiResponse<T> error(ErrorCode errorCode, String customMessage, Object details) {
+  public static <T> ApiResponse<T> error(ErrorCode errorCode, String customMessage,
+      Object details) {
     ErrorInfo errorInfo = new ErrorInfo(
         errorCode.getCode(),
         customMessage,
@@ -62,11 +62,11 @@ public class ApiResponse<T> {
   }
 
 
-
   @Getter
   @AllArgsConstructor
   @JsonInclude(Include.NON_NULL)
   public static class ErrorInfo {
+
     private String code;
     private String message;
     private Object details;
