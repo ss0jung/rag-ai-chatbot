@@ -41,7 +41,7 @@ interface LeftSidebarProps {
   selectedVaultId: string;
   selectedSessionId: string | null;
   onSelectVault: (vaultId: string) => void;
-  onCreateVault: (name: string, description?: string) => void;
+  onCreateVault: (name: string, description?: string) => Promise<void>;
   onDeleteVault: (id: string) => void;
   onUploadDocuments: (documents: Document[]) => void;
   onDeleteDocument: (id: string) => void;
@@ -80,16 +80,19 @@ export default function LeftSidebar({
     setIsUploadOpen(true);
   };
 
-  const handleCreateVault = () => {
+  const handleCreateVault = async () => {
     if (!newVaultName.trim()) {
       toast.error('보관함 이름을 입력하세요');
       return;
     }
-    onCreateVault(newVaultName, newVaultDescription);
-    setNewVaultName('');
-    setNewVaultDescription('');
-    setIsCreateVaultOpen(false);
-    toast.success('새 보관함이 생성되었습니다');
+    try {
+      await onCreateVault(newVaultName, newVaultDescription);
+      setNewVaultName('');
+      setNewVaultDescription('');
+      setIsCreateVaultOpen(false);
+    } catch (error) {
+      // 에러는 App.tsx에서 처리됨
+    }
   };
 
   const handleDeleteVault = (id: string, name: string) => {
@@ -199,7 +202,7 @@ export default function LeftSidebar({
                   문서 추가
                 </button>
                 <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
-                  ⚠️ 문서를 업로드하려면 먼저 보관함을 선택하세요
+                  ⚠️ 문서를 업로드하려면 먼저 보관함을 선택해주세요.
                 </p>
               </div>
             ) : (

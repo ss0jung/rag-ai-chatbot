@@ -210,7 +210,7 @@ export default function ChatInterface({ vault, documents, sessionId, onCreateSes
           {/* Sample Questions - Show only at start */}
           {messages.length <= 1 && (
             <div className="space-y-3">
-              <p className="text-sm text-gray-600">💡 샘플 질문:</p>
+              <p className="text-sm text-gray-600">💡 가이드 질문:</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {SAMPLE_QUESTIONS.map((question, index) => (
                   <button

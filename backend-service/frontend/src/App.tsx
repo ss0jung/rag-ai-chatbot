@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "./components/Header";
 import LeftSidebar from "./components/LeftSidebar";
 import ChatInterface from "./components/ChatInterface";
 import { Toaster } from "./components/ui/sonner";
+import { namespaceApi, type NamespaceResponse } from "./services/namespaceApi";
+import { documentApi, type DocumentUploadResponse, type DocumentQueryResponse } from "./services/documentApi";
+import { toast } from "sonner";
 
 export interface Document {
-  id: string;
+  id: number;
   name: string;
   type: string;
   size: number;
   uploadedAt: Date;
-  content: string;
   vaultId: string;
 }
 
@@ -46,55 +48,13 @@ export interface Message {
 export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] =
     useState(false);
-  const [vaults, setVaults] = useState<DocumentVault[]>([
-    {
-      id: "1",
-      name: "기본 문서함",
-      description: "기본 문서 보관함",
-      createdAt: new Date("2025-10-15"),
-      documentCount: 2,
-    },
-    {
-      id: "2",
-      name: "사용자 가이드",
-      description: "사용자 매뉴얼 및 FAQ",
-      createdAt: new Date("2025-10-20"),
-      documentCount: 1,
-    },
-  ]);
+  const [vaults, setVaults] = useState<DocumentVault[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
 
-  const [documents, setDocuments] = useState<Document[]>([
-    {
-      id: "1",
-      name: "제품_가이드.pdf",
-      type: "application/pdf",
-      size: 2048000,
-      uploadedAt: new Date("2025-10-20"),
-      content:
-        "이 제품은 최신 AI 기술을 활용한 솔루션입니다. 주요 기능으로는 자동 문서 분석, 지능형 검색, 실시간 답변 생성이 있습니다. RAG(Retrieval-Augmented Generation) 기술을 사용하여 정확도를 높였습니다.",
-      vaultId: "1",
-    },
-    {
-      id: "2",
-      name: "기술_사양서.pdf",
-      type: "application/pdf",
-      size: 3072000,
-      uploadedAt: new Date("2025-10-22"),
-      content:
-        "시스템 요구사항: 최소 8GB RAM, 듀얼코어 프로세서. 지원 OS: Windows 10 이상, macOS 11 이상, Ubuntu 20.04 이상. API는 REST 기반이며 JSON 형식을 사용합니다.",
-      vaultId: "1",
-    },
-    {
-      id: "3",
-      name: "사용자_매뉴얼.docx",
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      size: 1536000,
-      uploadedAt: new Date("2025-10-25"),
-      content:
-        "시작하기: 1. 문서 보관함을 선택하거나 생성합니다. 2. 문서를 업로드합니다. 3. 채팅창에서 질문합니다. 시스템이 자동으로 관련 문서를 찾아 답변을 생성합니다.",
-      vaultId: "2",
-    },
-  ]);
+  const DEMO_USER_ID = 1;
+
+  const [documents, setDocuments] = useState<Document[]>([]);
 
   const [chatSessions, setChatSessions] = useState<
     ChatSession[]
@@ -123,24 +83,31 @@ export default function App() {
   ]);
 
   const [selectedVaultId, setSelectedVaultId] =
-    useState<string>("1");
+    useState<string>("");
   const [selectedSessionId, setSelectedSessionId] = useState<
     string | null
-  >("1");
+  >(null);
 
-  const handleCreateVault = (
+  const handleCreateVault = async (
     name: string,
     description?: string,
   ) => {
-    const newVault: DocumentVault = {
-      id: Date.now().toString(),
-      name,
-      description,
-      createdAt: new Date(),
-      documentCount: 0,
-    };
-    setVaults([...vaults, newVault]);
-    setSelectedVaultId(newVault.id);
+    try {
+      const newNamespace = await namespaceApi.createNamespace(DEMO_USER_ID, name, description);
+      const newVault: DocumentVault = {
+        id: newNamespace.id.toString(),
+        name: newNamespace.name,
+        description: newNamespace.description,
+        createdAt: new Date(newNamespace.createdAt),
+        documentCount: 0,
+      };
+      setVaults([...vaults, newVault]);
+      setSelectedVaultId(newVault.id);
+      toast.success('새 보관함이 생성되었습니다');
+    } catch (error) {
+      console.error('Failed to create vault:', error);
+      toast.error('보관함 생성에 실패했습니다');
+    }
   };
 
   const handleDeleteVault = (id: string) => {
@@ -218,12 +185,86 @@ export default function App() {
     setSelectedSessionId(null);
   };
 
+  const loadVaults = async () => {
+    try {
+      setIsLoading(true);
+      const namespaces = await namespaceApi.getNamespaces(DEMO_USER_ID);
+      const mappedVaults: DocumentVault[] = namespaces.map(item => ({
+        id: item.namespace.id.toString(),
+        name: item.namespace.name,
+        description: item.namespace.description,
+        createdAt: new Date(item.namespace.createdAt),
+        documentCount: item.documentTotalCnt,
+      }));
+      setVaults(mappedVaults);
+
+      // 첫 번째 보관함을 기본 선택
+      if (mappedVaults.length > 0 && !selectedVaultId) {
+        setSelectedVaultId(mappedVaults[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to load vaults:', error);
+      toast.error('문서 보관함 목록을 불러오는데 실패했습니다');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadDocuments = async (vaultId: string) => {
+    if (!vaultId) return;
+
+    try {
+      setDocumentsLoading(true);
+      const docs = await documentApi.getDocuments(DEMO_USER_ID, parseInt(vaultId));
+      const mappedDocuments: Document[] = docs.map(doc => ({
+        id: doc.id,
+        name: doc.name,
+        type: doc.type,
+        size: doc.size,
+        uploadedAt: new Date(doc.uploadedAt),
+        vaultId: doc.vaultId.toString(),
+      }));
+      setDocuments(prevDocs => {
+        // 기존 문서 중 다른 보관함의 문서는 유지하고, 현재 보관함의 문서만 교체
+        const otherVaultDocs = prevDocs.filter(d => d.vaultId !== vaultId);
+        return [...otherVaultDocs, ...mappedDocuments];
+      });
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+      toast.error('문서 목록을 불러오는데 실패했습니다');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadVaults();
+  }, []);
+
+  // 선택된 보관함이 변경될 때 문서 목록 로드
+  useEffect(() => {
+    if (selectedVaultId) {
+      loadDocuments(selectedVaultId);
+    }
+  }, [selectedVaultId]);
+
   const vaultDocuments = documents.filter(
     (d) => d.vaultId === selectedVaultId,
   );
   const selectedVault = vaults.find(
     (v) => v.id === selectedVaultId,
   );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">문서 보관함을 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

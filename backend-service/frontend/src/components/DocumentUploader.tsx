@@ -4,15 +4,17 @@ import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { Alert, AlertDescription } from './ui/alert';
 import { toast } from 'sonner@2.0.3';
+import { documentApi } from '../services/documentApi';
 import type { Document } from '../App';
 
 interface DocumentUploaderProps {
   onUpload: (documents: Document[]) => void;
   vaultId: string;
   vaultName?: string;
+  userId?: number;
 }
 
-export default function DocumentUploader({ onUpload, vaultId, vaultName }: DocumentUploaderProps) {
+export default function DocumentUploader({ onUpload, vaultId, vaultName, userId = 1 }: DocumentUploaderProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -48,16 +50,12 @@ export default function DocumentUploader({ onUpload, vaultId, vaultName }: Docum
 
   const handleFiles = (files: File[]) => {
     const validFiles = files.filter(file => {
-      const validTypes = [
-        'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain'
-      ];
+      const validTypes = ['application/pdf'];
       return validTypes.includes(file.type) && file.size <= 10 * 1024 * 1024;
     });
 
     if (validFiles.length !== files.length) {
-      toast.error('일부 파일이 지원되지 않거나 크기가 10MB를 초과합니다');
+      toast.error('일부 파일이 지원되지 않거나 크기가 10MB를 초과합니다. PDF 파일만 업로드 가능합니다.');
     }
 
     setSelectedFiles(prev => [...prev, ...validFiles]);
@@ -69,43 +67,62 @@ export default function DocumentUploader({ onUpload, vaultId, vaultName }: Docum
 
   const handleUpload = async () => {
     if (selectedFiles.length === 0) {
-      toast.error('업로드할 파일을 선택하세요');
+      toast.error('업로드할 파일을 선택해주세요.');
       return;
     }
 
     setUploading(true);
     setUploadProgress(0);
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
+    try {
+      const newDocuments: Document[] = [];
+      const totalFiles = selectedFiles.length;
+
+      // Upload files sequentially
+      for (let i = 0; i < totalFiles; i++) {
+        const file = selectedFiles[i];
+
+        try {
+          // Upload file to backend
+          const response = await documentApi.uploadDocument(userId, vaultId, file);
+
+          // Create document object from response
+          const document: Document = {
+            id: response.id,
+            name: response.fileName,
+            type: file.type,
+            size: file.size,
+            uploadedAt: new Date(response.createdAt),
+            content: `문서가 업로드되어 처리 중입니다.`,
+            vaultId
+          };
+
+          newDocuments.push(document);
+
+          // Update progress
+          setUploadProgress(Math.round(((i + 1) / totalFiles) * 100));
+
+          toast.success(`${file.name} 업로드 완료`);
+        } catch (error) {
+          console.error(`Failed to upload ${file.name}:`, error);
+          toast.error(`${file.name} 업로드 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
         }
-        return prev + 10;
-      });
-    }, 200);
+      }
 
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
+      // Update parent component with uploaded documents
+      if (newDocuments.length > 0) {
+        onUpload(newDocuments);
+        toast.success(`${newDocuments.length}개의 문서가 업로드되었습니다`);
+      }
 
-    // Create mock document objects
-    const newDocuments: Document[] = selectedFiles.map(file => ({
-      id: Math.random().toString(36).substr(2, 9),
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      uploadedAt: new Date(),
-      content: `이것은 ${file.name}의 샘플 내용입니다. 실제 환경에서는 파일 내용이 추출되어 RAG 시스템에 저장됩니다.`,
-      vaultId
-    }));
-
-    onUpload(newDocuments);
-    setUploading(false);
-    setUploadProgress(0);
-    setSelectedFiles([]);
-    toast.success(`${selectedFiles.length}개의 문서가 업로드되었습니다`);
+      setSelectedFiles([]);
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('업로드 중 오류가 발생했습니다');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
   };
 
   const onButtonClick = () => {
@@ -141,16 +158,16 @@ export default function DocumentUploader({ onUpload, vaultId, vaultName }: Docum
           type="file"
           multiple
           onChange={handleChange}
-          accept=".pdf,.docx,.txt"
+          accept=".pdf"
           className="hidden"
         />
-        
+
         <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
         <p className="mb-2 text-gray-700">
           파일을 드래그하거나 클릭하여 업로드
         </p>
         <p className="text-xs text-gray-500 mb-4">
-          PDF, DOCX, TXT (최대 10MB)
+          PDF 파일만 지원 (최대 10MB)
         </p>
         <Button onClick={onButtonClick} variant="outline">
           파일 선택

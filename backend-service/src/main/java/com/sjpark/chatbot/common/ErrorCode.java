@@ -32,6 +32,7 @@ public enum ErrorCode {
   DOCUMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "DOC_001", "문서를 찾을 수 없습니다."),
   DOCUMENT_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "DOC_002", "문서 업로드에 실패했습니다."),
   INVALID_FILE_FORMAT(HttpStatus.BAD_REQUEST, "DOC_003", "지원하지 않는 파일 형식입니다."),
+  DUPLICATE_DOCUMENT(HttpStatus.CONFLICT, "DOC_004", "동일한 파일이 이미 업로드되어 있습니다."),
 
   // 대화 에러
   CONVERSATION_NOT_FOUND(HttpStatus.NOT_FOUND, "CONV_001", "대화를 찾을 수 없습니다."),

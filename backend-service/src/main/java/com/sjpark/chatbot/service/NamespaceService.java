@@ -5,6 +5,7 @@ import com.sjpark.chatbot.domain.User;
 import com.sjpark.chatbot.dto.AiNamespaceCreateResponse;
 import com.sjpark.chatbot.dto.NamespaceCreateRequest;
 import com.sjpark.chatbot.dto.NamespaceResponse;
+import com.sjpark.chatbot.dto.NamespaceWithTotalCnt;
 import com.sjpark.chatbot.proxy.AiApiClient;
 import com.sjpark.chatbot.repo.NamespaceRepository;
 import com.sjpark.chatbot.repo.UserRepository;
@@ -25,14 +26,14 @@ public class NamespaceService {
   private final AiApiClient aiApiClient;
 
   /**
-   * 사용자별 네임스페이스 전체 목록 조회
+   * 사용자별 문서 보관함 목록 조회 (문서 개수 포함)
    */
-  public List<Namespace> getNamespacesByUserId(Long userId) {
-
+  public List<NamespaceWithTotalCnt> getNamespacesByUserId(Long userId) {
+    // 1. 사용자 조회
     User user = userRepository.findById(userId)
-        .orElseThrow(()-> new IllegalArgumentException("존재하지 않는 사용자입니다."));
+        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다."));
 
-    return namespaceRepository.findByUser(user);
+    return namespaceRepository.findByUserWithDocumentTotalCnt(user);
   }
 
   /**
@@ -40,21 +41,21 @@ public class NamespaceService {
    */
   @Transactional
   public NamespaceResponse createNamespaceWithAi(NamespaceCreateRequest request) {
-    log.info("네임스페이스 생성 요청 - userId: {}, namespaceName: {}", request.getUserId(), request.getName());
-
-    // 1. 네임스페이스 중복 체크
+    // 1. 사용자 및 네임스페이스 이름 중복 확인
     User user = userRepository.findById(request.getUserId())
-        .orElseThrow(()-> new IllegalArgumentException("존재하지 않는 사용자입니다."));
+        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사용자입니다."));
 
     if (namespaceRepository.existsByUserAndName(user, request.getName())) {
       throw new IllegalArgumentException("동일한 이름의 문서 보관함이 존재합니다.");
     }
 
-    // 2. AI 서비스 Chroma 네임스페이스 생성 요청
+    // 2. AI 서비스 ChromaDB 네임스페이스 생성 요청
+    // AI 서비스용 네임스페이스 이름 생성 (사용자ID__네임스페이스이름)
     AiNamespaceCreateResponse response;
+    String chromaDBCollectionName = request.getUserId() + "__" + request.getName();
 
     try {
-      response = aiApiClient.createNamespace(request.getName());
+      response = aiApiClient.createNamespace(chromaDBCollectionName);
     } catch (Exception e) {
       throw new RuntimeException("Failed to create namespace: " + e.getMessage(), e);
     }
@@ -64,6 +65,8 @@ public class NamespaceService {
     Namespace namespace = Namespace.builder()
         .name(request.getName())
         .user(user)
+        .chromaCollectionName(chromaDBCollectionName)
+        .description(request.getDescription())
         .build();
 
     Namespace saved = namespaceRepository.save(namespace);
@@ -72,31 +75,32 @@ public class NamespaceService {
     return NamespaceResponse.from(saved);
   }
 
-  /**
-   * 네임스페이스 조회
-   */
-  public NamespaceResponse getNamespaceById(User user, Long namespaceId) {
-    Namespace namespace = namespaceRepository.findById(namespaceId)
-        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 네임스페이스입니다."));
-
-    // 권한 체크
-//    if(!namespace.getUser().getId().equals(user.getId())){
-//      throw new IllegalArgumentException("권한이 없는 네임스페이스입니다.");
-//    }
-
-    return NamespaceResponse.from(namespace);
-  }
 
   /**
    * 네임스페이스 삭제
    */
   @Transactional
-  public void deleteNamespace(User user, Long namespaceId) {
+  public void deleteNamespace(Long userId, Long namespaceId) {
+    // 1. 네임스페이스 존재 확인
     Namespace namespace = namespaceRepository.findById(namespaceId)
-        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 네임스페이스입니다."));
+        .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 문서 보관함입니다."));
+    // 2. 소유자 권한 확인
+    if (!namespace.getUser().getId().equals(userId)) {
+      throw new IllegalArgumentException("문서 보관함 삭제 권한이 없습니다.");
+    }
 
-    // TODO: AI 서비스에 ChromaDB 컬렉션 삭제 요청 추가
+    // 3. AI 서비스에서 ChromaDB 컬렉션 삭제
+    try {
+      aiApiClient.deleteNamespace(namespace.getChromaCollectionName());
+      log.info("ChromaDB 컬렉션 삭제 완료 - collectionName: {}", namespace.getChromaCollectionName());
+    } catch (Exception e) {
+      log.warn("AI namespace 삭제 실패 - collectionName: {}, error: {}",
+          namespace.getChromaCollectionName(), e.getMessage());
+      // ChromaDB 삭제 실패해도 DB는 삭제 진행 (일관성 유지)
+    }
 
-    namespaceRepository.delete(namespace);
+    // 4. DB에서 네임스페이스 삭제 (연관된 문서들도 함께 삭제됨)
+    namespaceRepository.deleteById(namespace.getId());
+    log.info("Namespace 삭제 완료 - id: {}, name: {}", namespace.getId(), namespace.getName());
   }
 }

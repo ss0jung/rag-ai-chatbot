@@ -8,15 +8,16 @@ __pycache__/
 env/
 
 # Storage
-storage/raw/**
-storage/artifacts/**
-storage/vdb/**
-!storage/vdb/_namespaces.json
-!storage/**/.gitkeep
-
+shared/**
+!shared/.gitkeep
+ai-service/chroma_db
+ai-service/scripts
+backend-service/CLAUDE.md
+backend-service/.claude
 *.faiss
 *.pkl
 *.index
+*.chroma_db
 
 # Java / Gradle
 *.class

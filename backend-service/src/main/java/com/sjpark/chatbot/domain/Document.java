@@ -35,9 +35,6 @@ public class Document {
   private User user;
 
   @Column(nullable = false)
-  private String title;
-
-  @Column(nullable = false)
   private String filename;
 
   @Column(name = "file_path", nullable = false, length = 500)
@@ -49,10 +46,13 @@ public class Document {
   @Column(name = "file_size", nullable = false)
   private Long fileSize;
 
+  @Column(name = "file_hash", length = 64, unique = true)
+  private String fileHash;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   @Builder.Default
-  private DocumentStatus status = DocumentStatus.QUEUED;
+  private DocumentStatus status = DocumentStatus.PENDING;
 
   @Column(name = "error_message", columnDefinition = "TEXT")
   private String errorMessage;
@@ -70,7 +70,11 @@ public class Document {
   private LocalDateTime updatedAt;
 
   public enum DocumentStatus {
-    QUEUED, PARSING, CHUNKING, EMBEDDING, INDEXING, DONE, ERROR
+    PENDING,     // 업로드 완료, 처리 대기
+    PROCESSING,  // 전처리/처리 진행 중
+    COMPLETED,   // 성공적으로 완료
+    FAILED,      // 처리 실패
+    CANCELLED;   // 취소됨
   }
 
   public void updateStatus(DocumentStatus newStatus) {
@@ -78,7 +82,7 @@ public class Document {
   }
 
   public void updateError(String message) {
-    this.status = DocumentStatus.ERROR;
+    this.status = DocumentStatus.FAILED;
     this.errorMessage = message;
   }
 }

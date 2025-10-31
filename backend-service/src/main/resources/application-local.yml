@@ -7,7 +7,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
@@ -21,10 +21,15 @@ spring:
       max-file-size: 50MB
       max-request-size: 50MB
 
+# 문서 저장 경로
+file:
+  upload:
+    dir: D:/ai-chatbot-workspace/shared
+
 # AI 서비스 설정
 ai:
   service:
-    url: http://localhost:8000  # FastAPI 서버 주소
+    url: http://127.0.0.1:8000  # FastAPI 서버 주소
     timeout: 30000               # 30초 타임아웃
 
 # CORS 설정 (개발용)
