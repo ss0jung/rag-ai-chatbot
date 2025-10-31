@@ -9,7 +9,7 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from app.core.vector_store import VectorStore
-from app.api import namespace_router
+from app.api import namespace_router, chat_router
 from app.api.namespace_router import get_vector_store
 
 # 환경 변수 로드
@@ -103,6 +103,7 @@ app.dependency_overrides[get_vector_store] = override_get_vector_store
 
 # 라우터 등록
 app.include_router(namespace_router.router)
+app.include_router(chat_router.router)
 
 
 # ===== Health Check Endpoint =====
@@ -123,27 +124,7 @@ async def health_check():
 # ===== 루트 엔드포인트 =====
 async def root():
     """루트 엔드포인트"""
-    return {"message": "RAG AI Service API", "docs": "/docs", "health": "/health"}
-
-
-# ===== 테스트용 임시 엔드포인트 (나중에 삭제) ====
-@app.get("/test/chroma")
-async def test_chroma():
-    """ChromaDB 연결 테스트"""
-    if not chroma_client:
-        return {"error": "ChromaDB not connected"}
-
-    try:
-        # 컬렉션 목록 조회
-        collections = chroma_client.list_collections()
-        return {
-            "status": "ok",
-            "collections": [col.name for col in collections],
-            "count": len(collections),
-        }
-    except Exception as e:
-        logger.error(f"ChromaDB test failed: {e}")
-        return {"error": str(e)}
+    return {"message": "RAG AI Service API", "health": "/health"}
 
 
 if __name__ == "__main__":

@@ -74,7 +74,6 @@ tasks.register('frontendBuild', NpmTask) {
     args = ['run', 'build']
 
     inputs.dir("$projectDir/frontend/src")
-    inputs.dir("$projectDir/frontend/public")
     inputs.files(
             "$projectDir/frontend/package.json",
             "$projectDir/frontend/package-lock.json",
@@ -101,7 +100,7 @@ tasks.register('frontendDev', NpmTask) {
 
 // Spring Boot 빌드 파이프라인에 React 빌드 통합
 // 개발 중에는 주석 처리하고, 배포 전에 활성화 하기
-//processResources.dependsOn 'frontendBuild'
+processResources.dependsOn 'frontendBuild'
 clean.dependsOn 'frontendClean'
 
 // 개발 편의 태스크
