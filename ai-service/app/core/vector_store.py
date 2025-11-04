@@ -31,15 +31,15 @@ class VectorStore:
         네임스페이스(Collection) 생성
 
         Args:
-            name: 생성할 네임스페이스 이름
+            name: 생성할 네임스페이스 이름 (user_id + "__" + namespace_name)
 
         Returns:
             Dict[str, Any]: 생성된 네임스페이스 정보 (name, document_count)
         """
         try:
-            # 기존 네임스페이스 존재 여부 확인
-            if self.exists_namespace(name):
-                raise ValueError(f"Namespace '{name}' already exists.")
+            # 기존 네임스페이스 존재 여부 확인 (메인서비스 쪽에서 미리 중복 검사하여 에러처리함)
+            # if self.exists_namespace(name):
+            #     raise ValueError(f"Namespace '{name}' already exists.")
 
             # LangChain Chroma 벡터 스토어 생성
             vector_store = Chroma(
@@ -141,6 +141,123 @@ class VectorStore:
             return True
         except Exception as e:
             logger.error(f"Failed to delete namespace - name: {name}, error: {e}")
+            raise
+
+    def add_documents(
+        self,
+        namespace: str,
+        documents: List[Any],
+    ) -> int:
+        """
+        네임스페이스에 문서 추가
+
+        Args:
+            namespace: 네임스페이스 이름
+            documents: LangChain Document 리스트
+
+        Returns:
+            int: 추가된 문서 수
+
+        Examples:
+            store.add_documents("my_namespace", documents)
+        """
+        try:
+            # 네임스페이스의 벡터 스토어 가져오기 (없으면 생성)
+            vector_store = self.get_namespace(namespace)
+
+            # 문서 추가 전 카운트
+            collection = self.client.get_collection(namespace)
+            before_count = collection.count()
+
+            # 문서 추가
+            vector_store.add_documents(documents)
+
+            # 문서 추가 후 카운트
+            after_count = collection.count()
+            added_count = after_count - before_count
+
+            logger.info(
+                f"문서 추가 완료 - namespace: {namespace}, "
+                f"추가된 문서 수: {added_count}, "
+                f"총 문서 수: {after_count}"
+            )
+
+            return added_count
+
+        except Exception as e:
+            logger.error(f"문서 추가 실패 - namespace: {namespace}, error: {e}")
+            raise
+
+    def delete_documents(
+        self,
+        namespace: str,
+        document_ids: Optional[List[str]] = None,
+        filter_dict: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """
+        네임스페이스 내에서 특정 문서들만 삭제
+
+        컬렉션은 유지되고, 지정된 문서만 삭제됩니다.
+
+        Args:
+            namespace: 네임스페이스 이름
+            document_ids: 삭제할 문서 ID 리스트 (ChromaDB의 내부 ID)
+            filter_dict: 메타데이터 필터 (예: {"document_id": "doc_001"})
+
+        Returns:
+            int: 삭제된 문서 수
+
+        Examples:
+            # ID로 삭제
+            store.delete_documents("my_namespace", document_ids=["id1", "id2"])
+
+            # 메타데이터 필터로 삭제
+            store.delete_documents(
+                "my_namespace",
+                filter_dict={"document_id": "doc_001"}
+            )
+        """
+        try:
+            if not document_ids and not filter_dict:
+                raise ValueError("document_ids 또는 filter_dict 중 하나는 필수입니다.")
+
+            # 컬렉션 가져오기
+            collection = self.client.get_collection(namespace)
+
+            # 삭제 전 문서 수
+            before_count = collection.count()
+
+            if document_ids:
+                # ID 기반 삭제
+                collection.delete(ids=document_ids)
+                logger.info(
+                    f"문서 삭제 완료 - namespace: {namespace}, "
+                    f"IDs: {document_ids[:5]}..."
+                    if len(document_ids) > 5
+                    else f"IDs: {document_ids}"
+                )
+            elif filter_dict:
+                # 메타데이터 필터 기반 삭제
+                collection.delete(where=filter_dict)
+                logger.info(
+                    f"문서 삭제 완료 - namespace: {namespace}, "
+                    f"Filter: {filter_dict}"
+                )
+
+            # 삭제 후 문서 수
+            after_count = collection.count()
+            deleted_count = before_count - after_count
+
+            logger.info(
+                f"문서 삭제 결과 - namespace: {namespace}, "
+                f"삭제된 문서 수: {deleted_count}, "
+                f"남은 문서 수: {after_count}"
+            )
+
+            return deleted_count
+
+        except Exception as e:
+            logger.error(f"문서 삭제 실패 - namespace: {namespace}, error: {e}")
             raise
 
     def exists_namespace(self, name: str) -> bool:

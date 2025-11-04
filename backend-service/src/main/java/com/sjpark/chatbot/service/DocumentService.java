@@ -111,9 +111,9 @@ public class DocumentService {
       documentRepository.save(savedDocument);
 
       // AI 서비스 호출 (chromaCollectionName 사용)
-      AiDocumentUploadResponse aiResponse = aiApiClient.preprocessDocument(
+      AiDocumentUploadResponse aiResponse = aiApiClient.indexDocument(
           savedDocument.getId(),
-          namespace.getChromaCollectionName(),
+          namespace,
           savedFilePath,
           file.getOriginalFilename()
       );

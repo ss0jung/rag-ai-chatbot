@@ -42,7 +42,7 @@ interface LeftSidebarProps {
   selectedSessionId: string | null;
   onSelectVault: (vaultId: string) => void;
   onCreateVault: (name: string, description?: string) => Promise<void>;
-  onDeleteVault: (id: string) => void;
+  onDeleteVault: (id: string) => Promise<void>;
   onUploadDocuments: (documents: Document[]) => void;
   onDeleteDocument: (id: string) => void;
   onSelectSession: (sessionId: string | null) => void;
@@ -95,10 +95,9 @@ export default function LeftSidebar({
     }
   };
 
-  const handleDeleteVault = (id: string, name: string) => {
+  const handleDeleteVault = async (id: string, name: string) => {
     if (confirm(`"${name}" 보관함을 삭제하시겠습니까? 모든 문서와 채팅 이력이 삭제됩니다.`)) {
-      onDeleteVault(id);
-      toast.success('보관함이 삭제되었습니다');
+      await onDeleteVault(id);
     }
   };
 

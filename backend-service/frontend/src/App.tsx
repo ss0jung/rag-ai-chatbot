@@ -110,15 +110,22 @@ export default function App() {
     }
   };
 
-  const handleDeleteVault = (id: string) => {
-    setVaults(vaults.filter((v) => v.id !== id));
-    setDocuments(documents.filter((d) => d.vaultId !== id));
-    setChatSessions(
-      chatSessions.filter((s) => s.vaultId !== id),
-    );
-    if (selectedVaultId === id) {
-      setSelectedVaultId(vaults[0]?.id || "");
-      setSelectedSessionId(null);
+  const handleDeleteVault = async (id: string) => {
+    try {
+      await namespaceApi.deleteNamespace(DEMO_USER_ID.toString(), id);
+      setVaults(vaults.filter((v) => v.id !== id));
+      setDocuments(documents.filter((d) => d.vaultId !== id));
+      setChatSessions(
+        chatSessions.filter((s) => s.vaultId !== id),
+      );
+      if (selectedVaultId === id) {
+        setSelectedVaultId(vaults[0]?.id || "");
+        setSelectedSessionId(null);
+      }
+      toast.success('보관함이 삭제되었습니다');
+    } catch (error) {
+      console.error('Failed to delete vault:', error);
+      toast.error('보관함 삭제에 실패했습니다');
     }
   };
 

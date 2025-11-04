@@ -9,6 +9,7 @@ import com.sjpark.chatbot.dto.NamespaceResponse;
 import com.sjpark.chatbot.dto.NamespaceWithTotalCnt;
 import com.sjpark.chatbot.service.DocumentService;
 import com.sjpark.chatbot.service.NamespaceService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,7 @@ public class NamespaceController {
    * TODO: JWT 인증 구현 후 request에서 userId 제거하고 SecurityContext에서 추출
    */
   @PostMapping
+  @Operation(summary = "문서보관함 신규 생성")
   public ApiResponse<NamespaceResponse> create(@RequestBody @Valid NamespaceCreateRequest request) {
     log.info("네임스페이스 생성 요청 - 사용자 ID: {}, 네임스페이스 이름: {}", request.getUserId(), request.getName());
 
@@ -68,6 +70,7 @@ public class NamespaceController {
    * TODO: JWT 인증 구현 후 userId 파라미터 제거하고 SecurityContext에서 추출
    */
   @DeleteMapping("/{namespaceId}")
+  @Operation(summary = "문서보관함 및 하위 문서 일괄 삭제")
   public ApiResponse<Object> delete(
       @PathVariable Long namespaceId,
       @RequestParam Long userId) {
@@ -113,7 +116,6 @@ public class NamespaceController {
     }
 
     log.info("네임스페이스에 문서 업로드 요청 - 파일명: {}, 네임스페이스 ID: {}, 사용자 ID: {}", request.getFile().getOriginalFilename(), namespaceId, request.getUserId());
-
     DocumentUploadResponse response = documentService.uploadDocument(request);
 
     log.info("문서 업로드 완료 - 문서 ID: {}", response.getId());

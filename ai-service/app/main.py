@@ -9,8 +9,8 @@ import os
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
 from app.core.vector_store import VectorStore
+from app.core.dependencies import get_vector_store
 from app.api import namespace_router, chat_router
-from app.api.namespace_router import get_vector_store
 
 # 환경 변수 로드
 load_dotenv()
@@ -60,6 +60,7 @@ async def lifespan(app: FastAPI):
 
         # VectorStore 초기화 (임베딩 함수 포함)
         vector_store = VectorStore(chroma_client, embeddings)
+        logger.info("VectorStore 싱글톤 초기화 완료")
 
     except Exception as e:
         logger.error(f"Service initialization failed: {e}")
@@ -92,13 +93,16 @@ app.add_middleware(
 
 
 # 의존성 주입 오버라이드
-def override_get_vector_store():
+def override_get_vector_store() -> VectorStore:
     """VectorStore 의존성 주입 오버라이드"""
     if vector_store is None:
-        raise RuntimeError("VectorStore is not initialized.")
+        raise RuntimeError(
+            "VectorStore is not initialized."
+            "Check if ChromaDB connection failed during startup."
+        )
     return vector_store
 
-
+# 공통 의존성 함수를 오버라이드
 app.dependency_overrides[get_vector_store] = override_get_vector_store
 
 # 라우터 등록

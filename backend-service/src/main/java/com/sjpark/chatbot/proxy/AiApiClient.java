@@ -1,6 +1,7 @@
 package com.sjpark.chatbot.proxy;
 
 
+import com.sjpark.chatbot.domain.Namespace;
 import com.sjpark.chatbot.dto.AiDocumentUploadRequest;
 import com.sjpark.chatbot.dto.AiDocumentUploadResponse;
 import com.sjpark.chatbot.dto.AiNamespaceCreateRequest;
@@ -98,20 +99,20 @@ public class AiApiClient {
   /**
    * AI 서비스에 문서 전처리 요청 (로드/청킹/임베딩/vectorDB 저장)
    */
-  public AiDocumentUploadResponse preprocessDocument(Long documentId, String namespaceName, String filePath, String filename) {
-    log.info("AI 서비스 문서 전처리 요청 - documentId: {}, namespace: {}, filename: {}, filePath: {}",
-        documentId, namespaceName, filename, filePath);
+  public AiDocumentUploadResponse indexDocument(Long documentId, Namespace namespace, String filePath, String filename) {
+    log.info("AI 서비스 문서 전처리 요청 - documentId: {}, namespaceId: {}, filename: {}, filePath: {}",
+        documentId, namespace.getId(), filename, filePath);
 
     AiDocumentUploadRequest request = AiDocumentUploadRequest.builder()
-        .document_id(documentId)
-        .collection_name(namespaceName)
+        .document_id(documentId.toString())
+        .collection_name(namespace.getChromaCollectionName())
         .file_path(filePath)
         .filename(filename)
         .build();
 
     try {
       return aiWebClient.post()
-          .uri("/namespaces/{namespaceId}/documents", namespaceName)
+          .uri("/namespaces/{namespaceId}/documents", namespace.getId().toString())
           .bodyValue(request)
           .retrieve()
           .bodyToMono(AiDocumentUploadResponse.class)

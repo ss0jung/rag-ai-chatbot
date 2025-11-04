@@ -49,17 +49,34 @@ export const namespaceApi = {
         description,
       }),
     });
-    
+
     if (!response.ok) {
       throw new Error(`Failed to create namespace: ${response.statusText}`);
     }
-    
+
     const apiResponse: ApiResponse<NamespaceResponse> = await response.json();
-    
+
     if (!apiResponse.success) {
       throw new Error(apiResponse.message || 'Failed to create namespace');
     }
-    
+
     return apiResponse.data;
+  },
+
+  // 네임스페이스 삭제
+  async deleteNamespace(userId: string, namespaceId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/namespaces/${namespaceId}?userId=${userId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete namespace: ${response.statusText}`);
+    }
+
+    const apiResponse: ApiResponse<null> = await response.json();
+
+    if (!apiResponse.success) {
+      throw new Error(apiResponse.message || 'Failed to delete namespace');
+    }
   },
 };

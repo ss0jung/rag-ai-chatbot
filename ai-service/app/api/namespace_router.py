@@ -3,14 +3,14 @@
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
-from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PDFPlumberLoader
-from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 from loguru import logger
+import logging
+from pathlib import Path
+
 from app.models.namespace import (
     NamespaceCreateRequest,
     NamespaceResponse,
@@ -22,7 +22,7 @@ from app.models.document import (
     DocumentStatus,
 )
 from app.core.vector_store import VectorStore
-import logging
+from app.core.dependencies import get_vector_store
 
 
 # 환경 변수 로드
@@ -34,16 +34,8 @@ router = APIRouter(prefix="/namespaces", tags=["Namespaces"])
 # 글로벌 상태 저장소
 document_status = {}
 
-# 전역 임베딩 설정
-embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
 # 전역 로거 설정
 logger = logging.getLogger(__name__)
-
-
-async def get_vector_store() -> VectorStore:
-    """VectorStore 의존성 주입(main.py에서 설정)"""
-    raise NotImplementedError("Dependency injection not configured.")
 
 
 @router.get("", response_model=NamespaceListResponse)
@@ -95,6 +87,64 @@ async def create_namespace(
         )
 
 
+@router.delete("/{namespaceId}/documents/{document_id}")
+async def delete_document(
+    namespaceId: str,
+    document_id: str,
+    vector_store: VectorStore = Depends(get_vector_store),
+):
+    """
+    특정 문서 삭제 (해당 document_id를 가진 모든 청크 삭제)
+
+    Args:
+        namespaceId: 네임스페이스(컬렉션) 이름
+        document_id: 삭제할 문서 ID (메타데이터의 document_id)
+    """
+    try:
+        logger.info(
+            f"문서 삭제 요청 - namespace: {namespaceId}, " f"document_id: {document_id}"
+        )
+
+        # 네임스페이스 존재 여부 확인
+        if not vector_store.exists_namespace(namespaceId):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"네임스페이스를 찾을 수 없습니다: {namespaceId}",
+            )
+
+        # VectorStore를 통해 문서 삭제 (HttpClient 사용)
+        deleted_count = vector_store.delete_documents(
+            namespace=namespaceId, filter_dict={"document_id": document_id}
+        )
+
+        if deleted_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"문서를 찾을 수 없습니다: {document_id}",
+            )
+
+        logger.info(
+            f"문서 삭제 완료 - namespace: {namespaceId}, "
+            f"document_id: {document_id}, "
+            f"삭제된 청크 수: {deleted_count}"
+        )
+
+        return {
+            "message": "문서 삭제 완료",
+            "document_id": document_id,
+            "deleted_chunks": deleted_count,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"문서 삭제 중 오류 발생: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"문서 삭제에 실패했습니다: {str(e)}",
+        )
+
+
 @router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_namespace(
     name: str,
@@ -123,7 +173,9 @@ async def delete_namespace(
         )
 
 
-async def process_document_background(request: DocumentUploadRequest):
+async def index_document_background(
+    request: DocumentUploadRequest, vector_store: VectorStore
+):
     """백그라운드에서 문서 전처리"""
     try:
         # 상태 : PENDING -> PROCESSING
@@ -136,42 +188,54 @@ async def process_document_background(request: DocumentUploadRequest):
             f"문서 처리 시작 - documentId : {request.document_id}, filePath: {request.file_path}"
         )
 
+        # 파일 존재 확인
+        file_path = Path(request.file_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {request.file_path}")
+
         # 1. 문서 로드
-        loader = PDFPlumberLoader(request.file_path)
+        loader = PDFPlumberLoader(file_path=str(file_path))
         documents = loader.load()
         logger.info(f"문서 로드 완료 - {len(documents)}개 페이지")
 
         # 2. 텍스트 분할
         text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000, chunk_overlap=50
+            chunk_size=1000,
+            chunk_overlap=50,
+            separators=["\n\n", "\n", " ", "", ".", "!", "?"],
+            length_function=len,
         )
-        split_documents = text_splitter.split_documents(documents)
-        logger.info(f"문서 분할 완료 : {len(split_documents)}개 청크")
+        splited_documents = text_splitter.split_documents(documents)
+        logger.info(f"문서 분할 완료 : {len(splited_documents)}개 청크")
 
         # 3. 메타 데이터 추가
-        for doc in split_documents:
+        for doc in splited_documents:
             doc.metadata.update(
                 {"document_id": request.document_id, "filename": request.filename}
             )
         logger.info(f"메타데이터 추가 완료")
 
-        # 4. 벡터 스토어에 저장
-        vectorstore = Chroma.from_documents(
-            documents=split_documents,
-            embedding=embeddings,
-            collection_name=request.collection_name,
-            persist_directory="./chroma_db",  # 영구 저장 경로
+        # 4. VectorStore를 통해 문서 추가
+        added_count = vector_store.add_documents(
+            namespace=request.collection_name, documents=splited_documents
+        )
+
+        logger.info(
+            f"벡터 스토어 저장 완료 - "
+            f"collection: {request.collection_name}, "
+            f"추가된 청크: {added_count}개"
         )
 
         # 5. 상태 업데이트 : PROCESSED
         document_status[request.document_id] = {
             "status": DocumentStatus.PROCESSED,
-            "chunks_count": len(split_documents),
+            "chunks_count": len(splited_documents),
             "processed_at": datetime.now(timezone.utc),
             "error_message": None,
         }
 
         logging.info(f"문서 처리 완료: {request.document_id}")
+
     except FileNotFoundError as e:
         logging.error(f"문서 파일을 찾을 수 없습니다: {request.file_path}")
         document_status[request.document_id] = {
@@ -192,11 +256,14 @@ async def process_document_background(request: DocumentUploadRequest):
 
 @router.post("/{namespaceId}/documents")
 async def upload_document(
-    namespaceId: str, request: DocumentUploadRequest, background_tasks: BackgroundTasks
+    namespaceId: str,
+    request: DocumentUploadRequest,
+    background_tasks: BackgroundTasks,
+    vector_store: VectorStore = Depends(get_vector_store),
 ):
     """문서 업로드 및 백그라운드 처리 시작"""
-    background_tasks.add_task(process_document_background, request)
-    logger.info(f"문서 업로드 요청 접수: {request.document_id}  ")
+    background_tasks.add_task(index_document_background, request, vector_store)
+    logger.info(f"문서 업로드 요청 접수: {request.document_id}")
 
     return {
         "document_id": request.document_id,
